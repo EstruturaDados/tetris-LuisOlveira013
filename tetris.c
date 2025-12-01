@@ -1,56 +1,197 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-// Desafio Tetris Stack
-// Tema 3 - Integração de Fila e Pilha
-// Este código inicial serve como base para o desenvolvimento do sistema de controle de peças.
-// Use as instruções de cada nível para desenvolver o desafio.
+#define TAM_HASH 10
+
+//-----------------------------------------
+// ESTRUTURAS
+//-----------------------------------------
+
+// Árvore binária da mansão
+typedef struct Sala {
+    char nome[50];
+    char pista[50];
+    struct Sala *esq;
+    struct Sala *dir;
+} Sala;
+
+// BST para pistas coletadas
+typedef struct NodoBST {
+    char pista[50];
+    struct NodoBST *esq;
+    struct NodoBST *dir;
+} NodoBST;
+
+// Hash para pista → suspeito
+typedef struct NodoHash {
+    char pista[50];
+    char suspeito[50];
+    struct NodoHash *prox;
+} NodoHash;
+
+typedef struct {
+    NodoHash *lista[TAM_HASH];
+} HashTable;
+
+
+//-----------------------------------------
+// FUNÇÕES DA HASH
+//-----------------------------------------
+
+int hash(char *pista) {
+    int soma = 0;
+    for (int i = 0; pista[i] != '\0'; i++)
+        soma += pista[i];
+    return soma % TAM_HASH;
+}
+
+void inserirNaHash(HashTable *t, char *pista, char *suspeito) {
+    int h = hash(pista);
+
+    NodoHash *novo = malloc(sizeof(NodoHash));
+    strcpy(novo->pista, pista);
+    strcpy(novo->suspeito, suspeito);
+    novo->prox = t->lista[h];
+    t->lista[h] = novo;
+}
+
+char *encontrarSuspeito(HashTable *t, char *pista) {
+    int h = hash(pista);
+    NodoHash *aux = t->lista[h];
+
+    while (aux != NULL) {
+        if (strcmp(aux->pista, pista) == 0)
+            return aux->suspeito;
+        aux = aux->prox;
+    }
+    return NULL;
+}
+
+
+//-----------------------------------------
+// BST – PISTAS COLETADAS
+//-----------------------------------------
+
+NodoBST* inserirBST(NodoBST *raiz, char *pista) {
+    if (raiz == NULL) {
+        NodoBST *novo = malloc(sizeof(NodoBST));
+        strcpy(novo->pista, pista);
+        novo->esq = novo->dir = NULL;
+        return novo;
+    }
+
+    if (strcmp(pista, raiz->pista) < 0)
+        raiz->esq = inserirBST(raiz->esq, pista);
+    else
+        raiz->dir = inserirBST(raiz->dir, pista);
+
+    return raiz;
+}
+
+
+//-----------------------------------------
+// VERIFICAÇÃO FINAL
+//-----------------------------------------
+
+typedef struct {
+    int maria;
+    int joao;
+    int lucas;
+} ContadorSuspeitos;
+
+void contarSuspeitos(NodoBST *no, HashTable *table, ContadorSuspeitos *c) {
+    if (no == NULL) return;
+
+    contarSuspeitos(no->esq, table, c);
+
+    char *sus = encontrarSuspeito(table, no->pista);
+    if (sus != NULL) {
+        if (strcmp(sus, "Maria") == 0) c->maria++;
+        else if (strcmp(sus, "Joao") == 0) c->joao++;
+        else if (strcmp(sus, "Lucas") == 0) c->lucas++;
+    }
+
+    contarSuspeitos(no->dir, table, c);
+}
+
+void verificarSuspeitoFinal(NodoBST *raiz, HashTable *table) {
+    ContadorSuspeitos c = {0,0,0};
+
+    contarSuspeitos(raiz, table, &c);
+
+    printf("\n--- RESULTADO FINAL ---\n");
+    printf("Pontos: Maria=%d, Joao=%d, Lucas=%d\n", c.maria, c.joao, c.lucas);
+
+    if (c.maria >= c.joao && c.maria >= c.lucas)
+        printf("Suspeito final: MARIA\n");
+    else if (c.joao >= c.maria && c.joao >= c.lucas)
+        printf("Suspeito final: JOAO\n");
+    else
+        printf("Suspeito final: LUCAS\n");
+}
+
+
+//-----------------------------------------
+// EXPLORAÇÃO DA MANSÃO
+//-----------------------------------------
+
+void explorar(Sala *atual, NodoBST **pistas) {
+    if (atual == NULL) return;
+
+    char opcao;
+    printf("\nVocê entrou na sala: %s\n", atual->nome);
+    printf("Pista encontrada: %s\n", atual->pista);
+
+    *pistas = inserirBST(*pistas, atual->pista);
+
+    printf("Escolha caminho:\n");
+    printf("e - esquerda\n");
+    printf("d - direita\n");
+    printf("s - sair\n");
+    scanf(" %c", &opcao);
+
+    if (opcao == 'e') explorar(atual->esq, pistas);
+    else if (opcao == 'd') explorar(atual->dir, pistas);
+    else if (opcao == 's') return;
+}
+
+
+//-----------------------------------------
+// MAIN – MONTA MANSÃO E EXECUTA JOGO
+//-----------------------------------------
+
+Sala* novaSala(char *nome, char *pista) {
+    Sala *s = malloc(sizeof(Sala));
+    strcpy(s->nome, nome);
+    strcpy(s->pista, pista);
+    s->esq = s->dir = NULL;
+    return s;
+}
 
 int main() {
 
-    // 🧩 Nível Novato: Fila de Peças Futuras
-    //
-    // - Crie uma struct Peca com os campos: tipo (char) e id (int).
-    // - Implemente uma fila circular com capacidade para 5 peças.
-    // - Crie funções como inicializarFila(), enqueue(), dequeue(), filaCheia(), filaVazia().
-    // - Cada peça deve ser gerada automaticamente com um tipo aleatório e id sequencial.
-    // - Exiba a fila após cada ação com uma função mostrarFila().
-    // - Use um menu com opções como:
-    //      1 - Jogar peça (remover da frente)
-    //      0 - Sair
-    // - A cada remoção, insira uma nova peça ao final da fila.
+    // Tabela Hash
+    HashTable tabela;
+    for (int i = 0; i < TAM_HASH; i++) tabela.lista[i] = NULL;
 
+    inserirNaHash(&tabela, "pegada", "Maria");
+    inserirNaHash(&tabela, "luva", "Joao");
+    inserirNaHash(&tabela, "cabelo", "Lucas");
+    inserirNaHash(&tabela, "relógio", "Maria");
+    inserirNaHash(&tabela, "anel", "Joao");
 
+    // Mansão (árvore fixa)
+    Sala *entrada = novaSala("Entrada", "pegada");
+    entrada->esq = novaSala("Biblioteca", "cabelo");
+    entrada->dir = novaSala("Cozinha", "luva");
+    entrada->esq->esq = novaSala("Porão", "anel");
+    entrada->esq->dir = novaSala("Estúdio", "relógio");
 
-    // 🧠 Nível Aventureiro: Adição da Pilha de Reserva
-    //
-    // - Implemente uma pilha linear com capacidade para 3 peças.
-    // - Crie funções como inicializarPilha(), push(), pop(), pilhaCheia(), pilhaVazia().
-    // - Permita enviar uma peça da fila para a pilha (reserva).
-    // - Crie um menu com opção:
-    //      2 - Enviar peça da fila para a reserva (pilha)
-    //      3 - Usar peça da reserva (remover do topo da pilha)
-    // - Exiba a pilha junto com a fila após cada ação com mostrarPilha().
-    // - Mantenha a fila sempre com 5 peças (repondo com gerarPeca()).
+    NodoBST *pistas = NULL;
 
-
-    // 🔄 Nível Mestre: Integração Estratégica entre Fila e Pilha
-    //
-    // - Implemente interações avançadas entre as estruturas:
-    //      4 - Trocar a peça da frente da fila com o topo da pilha
-    //      5 - Trocar os 3 primeiros da fila com as 3 peças da pilha
-    // - Para a opção 4:
-    //      Verifique se a fila não está vazia e a pilha tem ao menos 1 peça.
-    //      Troque os elementos diretamente nos arrays.
-    // - Para a opção 5:
-    //      Verifique se a pilha tem exatamente 3 peças e a fila ao menos 3.
-    //      Use a lógica de índice circular para acessar os primeiros da fila.
-    // - Sempre valide as condições antes da troca e informe mensagens claras ao usuário.
-    // - Use funções auxiliares, se quiser, para modularizar a lógica de troca.
-    // - O menu deve ficar assim:
-    //      4 - Trocar peça da frente com topo da pilha
-    //      5 - Trocar 3 primeiros da fila com os 3 da pilha
-
+    explorar(entrada, &pistas);
+    verificarSuspeitoFinal(pistas, &tabela);
 
     return 0;
 }
-
